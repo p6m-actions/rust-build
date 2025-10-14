@@ -1,36 +1,269 @@
 name: "Rust Build"
-description: "A simple GitHub Action that prints a greeting"
+description: "Builds a Rust project with flexible lint, test, and build commands"
 author: "Jimmie Fulton <jimmie.fulton@gmail.com>"
 
 # Define the inputs for this action
 inputs:
-  who-to-greet:
-    description: "Who to greet"
-    required: true
-    default: "World"
-  message:
-    description: "Custom message to include"
+  # Lint configuration
+  run-lint:
+    description: "Whether to run linting"
     required: false
-    default: "Hello"
+    default: "true"
+  lint-command:
+    description: "Command to run for linting"
+    required: false
+    default: "cargo clippy"
+  lint-args:
+    description: "Additional arguments for the lint command"
+    required: false
+    default: "-- -D warnings"
+
+  # Format check configuration
+  run-format-check:
+    description: "Whether to check code formatting"
+    required: false
+    default: "true"
+  format-command:
+    description: "Command to run for format checking"
+    required: false
+    default: "cargo fmt"
+  format-args:
+    description: "Additional arguments for the format command"
+    required: false
+    default: "-- --check"
+
+  # Test configuration
+  run-test:
+    description: "Whether to run tests"
+    required: false
+    default: "true"
+  test-command:
+    description: "Command to run for testing"
+    required: false
+    default: "cargo test"
+  test-args:
+    description: "Additional arguments for the test command"
+    required: false
+    default: ""
+
+  # Build configuration
+  run-build:
+    description: "Whether to run build"
+    required: false
+    default: "true"
+  build-command:
+    description: "Command to run for building"
+    required: false
+    default: "cargo build"
+  build-args:
+    description: "Additional arguments for the build command"
+    required: false
+    default: "--release"
+
+  # Workspace and features
+  workspace:
+    description: "Build all workspace members"
+    required: false
+    default: "false"
+  all-features:
+    description: "Activate all available features"
+    required: false
+    default: "false"
+  no-default-features:
+    description: "Do not activate the default features"
+    required: false
+    default: "false"
+  features:
+    description: "Comma-separated list of features to activate"
+    required: false
+    default: ""
+
+  # Working directory
+  working-directory:
+    description: "Working directory for cargo commands"
+    required: false
+    default: "."
+
+  # Coverage configuration
+  archive-coverage:
+    description: "Whether to archive code coverage results"
+    required: false
+    default: "false"
+  coverage-path:
+    description: "Path to the coverage reports"
+    required: false
+    default: "target/coverage"
 
 # Define the outputs for this action
 outputs:
-  time:
-    description: "The time we greeted you"
-    value: ${{ steps.hello.outputs.time }}
+  build-status:
+    description: "Build status (success or failure)"
+    value: ${{ steps.build-status.outputs.status }}
 
 # Define the runs configuration
 runs:
   using: "composite"
   steps:
-    - name: Hello step
-      id: hello
+    - name: Format Check
+      if: inputs.run-format-check == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "::group::Running Format Check"
+
+        CMD="${{ inputs.format-command }} ${{ inputs.format-args }}"
+
+        # Add workspace flag if enabled
+        if [[ "${{ inputs.workspace }}" == "true" && "$CMD" == cargo* ]]; then
+          CMD="$CMD --workspace"
+        fi
+
+        echo "Running command: $CMD"
+        $CMD || {
+          echo "::error::Format check failed. Please run 'cargo fmt' to fix formatting."
+          exit 1
+        }
+        echo "::endgroup::"
+
+    - name: Lint
+      if: inputs.run-lint == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "::group::Running Lint"
+
+        CMD="${{ inputs.lint-command }} ${{ inputs.lint-args }}"
+
+        # Add workspace flag if enabled
+        if [[ "${{ inputs.workspace }}" == "true" && "$CMD" == cargo* ]]; then
+          CMD="$CMD --workspace"
+        fi
+
+        # Add features flags
+        if [[ "${{ inputs.all-features }}" == "true" ]]; then
+          CMD="$CMD --all-features"
+        elif [[ "${{ inputs.no-default-features }}" == "true" ]]; then
+          CMD="$CMD --no-default-features"
+        fi
+
+        if [[ -n "${{ inputs.features }}" ]]; then
+          CMD="$CMD --features ${{ inputs.features }}"
+        fi
+
+        echo "Running command: $CMD"
+        $CMD || {
+          echo "::error::Linting failed. Please check the logs above for errors."
+          exit 1
+        }
+        echo "::endgroup::"
+
+    - name: Test
+      if: inputs.run-test == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "::group::Running Tests"
+
+        CMD="${{ inputs.test-command }} ${{ inputs.test-args }}"
+
+        # Add workspace flag if enabled
+        if [[ "${{ inputs.workspace }}" == "true" && "$CMD" == cargo* ]]; then
+          CMD="$CMD --workspace"
+        fi
+
+        # Add features flags
+        if [[ "${{ inputs.all-features }}" == "true" ]]; then
+          CMD="$CMD --all-features"
+        elif [[ "${{ inputs.no-default-features }}" == "true" ]]; then
+          CMD="$CMD --no-default-features"
+        fi
+
+        if [[ -n "${{ inputs.features }}" ]]; then
+          CMD="$CMD --features ${{ inputs.features }}"
+        fi
+
+        echo "Running command: $CMD"
+        $CMD || {
+          echo "::error::Tests failed. Please check the logs above for errors."
+          exit 1
+        }
+        echo "::endgroup::"
+
+    - name: Archive code coverage results
+      if: inputs.archive-coverage == 'true' && inputs.run-test == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-coverage-report
+        path: ${{ inputs.working-directory }}/${{ inputs.coverage-path }}
+
+    - name: Build
+      if: inputs.run-build == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "::group::Running Build"
+
+        CMD="${{ inputs.build-command }} ${{ inputs.build-args }}"
+
+        # Add workspace flag if enabled
+        if [[ "${{ inputs.workspace }}" == "true" && "$CMD" == cargo* ]]; then
+          CMD="$CMD --workspace"
+        fi
+
+        # Add features flags
+        if [[ "${{ inputs.all-features }}" == "true" ]]; then
+          CMD="$CMD --all-features"
+        elif [[ "${{ inputs.no-default-features }}" == "true" ]]; then
+          CMD="$CMD --no-default-features"
+        fi
+
+        if [[ -n "${{ inputs.features }}" ]]; then
+          CMD="$CMD --features ${{ inputs.features }}"
+        fi
+
+        echo "Running command: $CMD"
+        $CMD || {
+          echo "::error::Build failed. Please check the logs above for errors."
+          exit 1
+        }
+        echo "::endgroup::"
+
+    - name: List Built Binaries
+      if: inputs.run-build == 'true' && success()
+      id: built-binaries
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "::group::Built Binaries"
+
+        # Determine the target directory based on build args
+        if [[ "${{ inputs.build-args }}" == *"--release"* ]]; then
+          TARGET_DIR="target/release"
+        else
+          TARGET_DIR="target/debug"
+        fi
+
+        if [ -d "$TARGET_DIR" ]; then
+          echo "Built binaries in $TARGET_DIR:"
+          # List executable files (binaries)
+          find "$TARGET_DIR" -maxdepth 1 -type f -executable 2>/dev/null || echo "No binaries found"
+        else
+          echo "No target directory found at $TARGET_DIR"
+        fi
+        echo "::endgroup::"
+
+    - name: Set build status
+      id: build-status
+      if: always()
       shell: bash
       run: |
-        echo "${{ inputs.message }}, ${{ inputs.who-to-greet }}!"
-        echo "time=$(date)" >> $GITHUB_OUTPUT
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+        fi
 
 # Define the branding for the action in the GitHub Marketplace
 branding:
-  icon: "award"
-  color: "blue"
+  icon: "package"
+  color: "orange"
