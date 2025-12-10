@@ -111,12 +111,16 @@ runs:
       run: |
         echo "::group::Running Format Check"
 
-        CMD="${{ inputs.format-command }} ${{ inputs.format-args }}"
+        CMD="${{ inputs.format-command }}"
 
-        # Add workspace flag if enabled
-        if [[ "${{ inputs.workspace }}" == "true" && "$CMD" == cargo* ]]; then
-          CMD="$CMD --workspace"
+        # Add --all flag for workspace builds (must come before --)
+        # Note: cargo fmt uses --all instead of --workspace
+        if [[ "${{ inputs.workspace }}" == "true" && "$CMD" == cargo\ fmt* ]]; then
+          CMD="$CMD --all"
         fi
+
+        # Add format args (e.g., "-- --check")
+        CMD="$CMD ${{ inputs.format-args }}"
 
         echo "Running command: $CMD"
         $CMD || {
