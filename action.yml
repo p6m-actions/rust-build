@@ -136,14 +136,14 @@ runs:
       run: |
         echo "::group::Running Lint"
 
-        CMD="${{ inputs.lint-command }} ${{ inputs.lint-args }}"
+        CMD="${{ inputs.lint-command }}"
 
-        # Add workspace flag if enabled
+        # Add workspace flag if enabled (must come before --)
         if [[ "${{ inputs.workspace }}" == "true" && "$CMD" == cargo* ]]; then
           CMD="$CMD --workspace"
         fi
 
-        # Add features flags
+        # Add features flags (must come before --)
         if [[ "${{ inputs.all-features }}" == "true" ]]; then
           CMD="$CMD --all-features"
         elif [[ "${{ inputs.no-default-features }}" == "true" ]]; then
@@ -153,6 +153,9 @@ runs:
         if [[ -n "${{ inputs.features }}" ]]; then
           CMD="$CMD --features ${{ inputs.features }}"
         fi
+
+        # Add lint args last (e.g., "-- -D warnings")
+        CMD="$CMD ${{ inputs.lint-args }}"
 
         echo "Running command: $CMD"
         $CMD || {
