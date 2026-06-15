@@ -104,6 +104,11 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ${{ inputs.working-directory }}
+
     - name: Format Check
       if: inputs.run-format-check == 'true'
       shell: bash
@@ -133,6 +138,8 @@ runs:
       if: inputs.run-lint == 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        CARGO_INCREMENTAL: 0
       run: |
         echo "::group::Running Lint"
 
@@ -168,6 +175,8 @@ runs:
       if: inputs.run-test == 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        CARGO_INCREMENTAL: 0
       run: |
         echo "::group::Running Tests"
 
@@ -207,6 +216,8 @@ runs:
       if: inputs.run-build == 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        CARGO_INCREMENTAL: 0
       run: |
         echo "::group::Running Build"
 
